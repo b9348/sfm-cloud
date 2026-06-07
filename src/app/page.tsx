@@ -13,7 +13,7 @@ export default function Home() {
       <h2>Mod Endpoints:</h2>
       <ul>
         <li>GET /api/mods/list?lang=en&page=1&limit=20 - List all mods</li>
-        <li>GET /api/mods/{id}?lang=en - Get mod details</li>
+        <li>GET /api/mods/[id]?lang=en - Get mod details</li>
         <li>POST /api/mods/create - Create new mod (requires auth)</li>
       </ul>
 
