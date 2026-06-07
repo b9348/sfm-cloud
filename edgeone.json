@@ -1,12 +1,6 @@
 {
   "buildCommand": "echo 'Build completed'",
   "outputDirectory": ".",
-  "rewrites": [
-    {
-      "source": "/api/auth/register",
-      "destination": "/functions/auth_register.py"
-    }
-  ],
   "cloudFunctions": {
     "python": {
       "maxDuration": 30
