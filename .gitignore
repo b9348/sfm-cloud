@@ -13,6 +13,13 @@ venv/
 .venv/
 pip-log.txt
 
+# Node.js
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+
 # IDE
 .vscode/
 .idea/
