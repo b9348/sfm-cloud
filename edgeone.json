@@ -1,4 +1,6 @@
 {
+  "buildCommand": "echo 'Build completed'",
+  "outputDirectory": ".",
   "cloudFunctions": {
     "python": {
       "maxDuration": 30
