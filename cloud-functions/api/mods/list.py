@@ -30,7 +30,7 @@ class handler(BaseHTTPRequestHandler):
 
             offset = (page - 1) * limit
 
-            # 连接数据库
+            # 连接数据库（添加超时设置）
             conn = pymysql.connect(
                 host=os.environ.get('DB_HOST', 'mysql7.sqlpub.com'),
                 port=int(os.environ.get('DB_PORT', '3312')),
@@ -38,7 +38,10 @@ class handler(BaseHTTPRequestHandler):
                 password=os.environ.get('DB_PASSWORD', 'fEPM4xyhL3WAVGYf'),
                 database=os.environ.get('DB_NAME', 'sfmmm1'),
                 charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor
+                cursorclass=pymysql.cursors.DictCursor,
+                connect_timeout=10,
+                read_timeout=10,
+                write_timeout=10
             )
             cursor = conn.cursor()
 
@@ -65,24 +68,20 @@ class handler(BaseHTTPRequestHandler):
             sql = f"""
                 SELECT 
                     m.id,
-                    m.name,
+                    m.mod_id as name,
                     m.version,
                     m.category,
                     m.download_count,
                     m.created_at,
                     m.updated_at,
-                    u.username as author_name,
-                    mt.display_name,
-                    mt.description,
-                    mt.language
+                    u.username as author_name
                 FROM mods m
                 JOIN users u ON m.author_id = u.id
-                LEFT JOIN mod_translations mt ON m.id = mt.mod_id AND mt.language = %s
                 WHERE {where_clause}
                 ORDER BY m.created_at DESC
                 LIMIT %s OFFSET %s
             """
-            cursor.execute(sql, [lang] + query_params + [limit, offset])
+            cursor.execute(sql, query_params + [limit, offset])
             mods = cursor.fetchall()
 
             # 处理结果
@@ -91,13 +90,13 @@ class handler(BaseHTTPRequestHandler):
                 result_mods.append({
                     "id": mod['id'],
                     "name": mod['name'],
-                    "display_name": mod['display_name'] or mod['name'],
-                    "description": mod['description'] or '',
+                    "display_name": mod['name'],  # 使用 mod_id 作为显示名
+                    "description": '',  # 暂不支持多语言描述
                     "version": mod['version'],
                     "category": mod['category'],
                     "author": mod['author_name'],
                     "download_count": mod['download_count'],
-                    "language": mod['language'] or lang,
+                    "language": lang,
                     "created_at": mod['created_at'].isoformat() if mod['created_at'] else None,
                     "updated_at": mod['updated_at'].isoformat() if mod['updated_at'] else None
                 })
