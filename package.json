@@ -1,8 +1,0 @@
-{
-  "name": "sfm-cloud",
-  "version": "1.0.0",
-  "description": "SFM Cloud API Backend",
-  "scripts": {
-    "build": "echo 'No build step required for Python Cloud Functions'"
-  }
-}
