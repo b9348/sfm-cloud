@@ -1,11 +1,11 @@
 """
 Mod 详情 API
 GET /api/mods/{id}
+支持查询参数: lang(语言)
 """
 import json
 import os
 import pymysql
-import re
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -15,7 +15,6 @@ class handler(BaseHTTPRequestHandler):
         """处理 GET 请求"""
         try:
             # 解析 URL 获取 mod_id
-            # self.path 格式: /api/mods/123?lang=en
             path_parts = self.path.split('?')[0].split('/')
             mod_id = None
             for part in path_parts:
@@ -46,15 +45,18 @@ class handler(BaseHTTPRequestHandler):
                 password=os.environ.get('DB_PASSWORD', 'fEPM4xyhL3WAVGYf'),
                 database=os.environ.get('DB_NAME', 'sfmmm1'),
                 charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor
+                cursorclass=pymysql.cursors.DictCursor,
+                connect_timeout=10,
+                read_timeout=10,
+                write_timeout=10
             )
             cursor = conn.cursor()
 
-            # 查询 Mod 详情
+            # 查询 Mod 详情 - 优先获取指定语言，否则回退到英语
             sql = """
                 SELECT 
                     m.id,
-                    m.name,
+                    m.mod_id as mod_key,
                     m.version,
                     m.category,
                     m.download_count,
@@ -62,17 +64,22 @@ class handler(BaseHTTPRequestHandler):
                     m.created_at,
                     m.updated_at,
                     u.username as author_name,
-                    mt.display_name,
-                    mt.description,
-                    mt.instructions,
-                    mt.changelog,
-                    mt.language
+                    COALESCE(mt_target.name, mt_en.name, m.mod_id) as display_name,
+                    COALESCE(mt_target.description, mt_en.description, '') as description,
+                    COALESCE(mt_target.instructions, mt_en.instructions, '') as instructions,
+                    COALESCE(mt_target.changelog, mt_en.changelog, '') as changelog,
+                    CASE 
+                        WHEN mt_target.name IS NOT NULL THEN %s
+                        WHEN mt_en.name IS NOT NULL THEN 'en'
+                        ELSE 'default'
+                    END as language
                 FROM mods m
                 JOIN users u ON m.author_id = u.id
-                LEFT JOIN mod_translations mt ON m.id = mt.mod_id AND mt.language = %s
+                LEFT JOIN mod_translations mt_target ON m.id = mt_target.mod_id AND mt_target.lang_code = %s
+                LEFT JOIN mod_translations mt_en ON m.id = mt_en.mod_id AND mt_en.lang_code = 'en'
                 WHERE m.id = %s AND m.is_public = TRUE
             """
-            cursor.execute(sql, (lang, mod_id))
+            cursor.execute(sql, (lang, lang, mod_id))
             mod = cursor.fetchone()
 
             if not mod:
@@ -87,42 +94,12 @@ class handler(BaseHTTPRequestHandler):
                 conn.close()
                 return
 
-            # 查询图片
+            # 查询所有可用语言
             cursor.execute(
-                "SELECT image_url FROM mod_images WHERE mod_id = %s ORDER BY sort_order",
+                "SELECT lang_code FROM mod_translations WHERE mod_id = %s",
                 (mod_id,)
             )
-            images = [row['image_url'] for row in cursor.fetchall()]
-
-            # 查询依赖
-            cursor.execute("""
-                SELECT m.id, m.name, mt.display_name
-                FROM mod_dependencies md
-                JOIN mods m ON md.dependency_mod_id = m.id
-                LEFT JOIN mod_translations mt ON m.id = mt.mod_id AND mt.language = %s
-                WHERE md.mod_id = %s
-            """, (lang, mod_id))
-            dependencies = []
-            for dep in cursor.fetchall():
-                dependencies.append({
-                    "id": dep['id'],
-                    "name": dep['name'],
-                    "display_name": dep['display_name'] or dep['name']
-                })
-
-            # 查询文件
-            cursor.execute(
-                "SELECT file_url, file_name, file_size, version FROM mod_files WHERE mod_id = %s",
-                (mod_id,)
-            )
-            files = []
-            for file in cursor.fetchall():
-                files.append({
-                    "url": file['file_url'],
-                    "name": file['file_name'],
-                    "size": file['file_size'],
-                    "version": file['version']
-                })
+            available_languages = [row['lang_code'] for row in cursor.fetchall()]
 
             cursor.close()
             conn.close()
@@ -135,8 +112,8 @@ class handler(BaseHTTPRequestHandler):
                 "success": True,
                 "data": {
                     "id": mod['id'],
-                    "name": mod['name'],
-                    "display_name": mod['display_name'] or mod['name'],
+                    "mod_key": mod['mod_key'],
+                    "display_name": mod['display_name'],
                     "description": mod['description'] or '',
                     "instructions": mod['instructions'] or '',
                     "changelog": mod['changelog'] or '',
@@ -144,20 +121,21 @@ class handler(BaseHTTPRequestHandler):
                     "category": mod['category'],
                     "author": mod['author_name'],
                     "download_count": mod['download_count'],
-                    "language": mod['language'] or lang,
-                    "images": images,
-                    "dependencies": dependencies,
-                    "files": files,
+                    "language": mod['language'],
+                    "available_languages": available_languages,
                     "created_at": mod['created_at'].isoformat() if mod['created_at'] else None,
                     "updated_at": mod['updated_at'].isoformat() if mod['updated_at'] else None
                 }
             }).encode())
 
         except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"Error in mods/[id]: {error_detail}")
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "success": False,
-                "message": str(e)
+                "message": f"Server error: {str(e)}"
             }).encode())

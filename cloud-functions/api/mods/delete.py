@@ -1,14 +1,12 @@
 """
-创建 Mod API
-POST /api/mods/create
-需要 JWT 认证
-支持多语言内容创建
+删除 Mod API
+DELETE /api/mods/delete
+需要 JWT 认证，只能删除自己创建的 Mod
 """
 import json
 import os
 import jwt
 import pymysql
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 
 
@@ -25,8 +23,8 @@ def verify_token(token):
 
 
 class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        """处理 POST 请求"""
+    def do_DELETE(self):
+        """处理 DELETE 请求"""
         try:
             # 验证 JWT Token
             auth_header = self.headers.get('Authorization', '')
@@ -61,42 +59,14 @@ class handler(BaseHTTPRequestHandler):
             data = json.loads(post_data.decode('utf-8'))
 
             # 获取必填字段
-            mod_key = data.get('mod_key', '').strip()
-            translations = data.get('translations', {})  # 多语言内容 {lang: {name, description, ...}}
-            category = data.get('category', 'other')
-            version = data.get('version', '1.0.0')
-
-            # 验证必填字段
-            if not mod_key:
+            mod_id = data.get('mod_id')
+            if not mod_id:
                 self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "success": False,
-                    "message": "Mod key is required"
-                }).encode())
-                return
-
-            # 验证 mod_key 格式（只允许字母、数字、下划线、连字符）
-            import re
-            if not re.match(r'^[a-zA-Z0-9_-]+$', mod_key):
-                self.send_response(400)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    "success": False,
-                    "message": "Mod key can only contain letters, numbers, underscores and hyphens"
-                }).encode())
-                return
-
-            # 验证至少有一个语言的翻译
-            if not translations:
-                self.send_response(400)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    "success": False,
-                    "message": "At least one language translation is required"
+                    "message": "Mod ID is required"
                 }).encode())
                 return
 
@@ -115,66 +85,56 @@ class handler(BaseHTTPRequestHandler):
             )
             cursor = conn.cursor()
 
-            # 检查 Mod key 是否已存在
-            cursor.execute("SELECT id FROM mods WHERE mod_id = %s", (mod_key,))
-            if cursor.fetchone():
-                self.send_response(409)
+            # 检查 Mod 是否存在且属于当前用户
+            cursor.execute(
+                "SELECT id, author_id, mod_id FROM mods WHERE id = %s",
+                (mod_id,)
+            )
+            mod = cursor.fetchone()
+
+            if not mod:
+                self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "success": False,
-                    "message": "Mod key already exists"
+                    "message": "Mod not found"
                 }).encode())
                 cursor.close()
                 conn.close()
                 return
 
-            # 创建 Mod
-            cursor.execute(
-                """INSERT INTO mods (author_id, mod_id, version, category, is_public)
-                    VALUES (%s, %s, %s, %s, %s)""",
-                (user_id, mod_key, version, category, True)
-            )
-            conn.commit()
-            mod_id = cursor.lastrowid
+            if mod['author_id'] != user_id:
+                self.send_response(403)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "success": False,
+                    "message": "You can only delete your own mods"
+                }).encode())
+                cursor.close()
+                conn.close()
+                return
 
-            # 创建多语言内容
-            supported_languages = ['zh', 'en', 'ja', 'ko', 'ru', 'fr', 'de']
-            for lang_code, content in translations.items():
-                if lang_code not in supported_languages:
-                    continue
-                
-                name = content.get('name', '').strip()
-                description = content.get('description', '').strip()
-                instructions = content.get('instructions', '').strip()
-                changelog = content.get('changelog', '').strip()
+            mod_key = mod['mod_id']
 
-                if name:  # 只有提供了名称才创建翻译
-                    cursor.execute(
-                        """INSERT INTO mod_translations 
-                            (mod_id, lang_code, name, description, instructions, changelog)
-                            VALUES (%s, %s, %s, %s, %s, %s)""",
-                        (mod_id, lang_code, name, description, instructions, changelog)
-                    )
-
+            # 删除 Mod（级联删除会自动删除关联的翻译、图片等）
+            cursor.execute("DELETE FROM mods WHERE id = %s", (mod_id,))
             conn.commit()
 
             cursor.close()
             conn.close()
 
             # 返回成功响应
-            self.send_response(201)
+            self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "success": True,
-                "message": "Mod created successfully",
+                "message": "Mod deleted successfully",
                 "data": {
                     "mod_id": mod_id,
-                    "mod_key": mod_key,
-                    "version": version,
-                    "category": category,
-                    "translations": list(translations.keys())
+                    "mod_key": mod_key
                 }
             }).encode())
 
@@ -189,7 +149,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             import traceback
             error_detail = traceback.format_exc()
-            print(f"Error in mods/create: {error_detail}")
+            print(f"Error in mods/delete: {error_detail}")
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
