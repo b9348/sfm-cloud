@@ -3,8 +3,8 @@
   "outputDirectory": ".",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/cloud-functions/api/[[default]].py"
+      "source": "/api/auth/register",
+      "destination": "/cloud-functions/auth_register.py"
     }
   ],
   "cloudFunctions": {
