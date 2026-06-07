@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/api/auth/register",
-      "destination": "/cloud-functions/auth_register.py"
+      "destination": "/functions/auth_register.py"
     }
   ],
   "cloudFunctions": {
