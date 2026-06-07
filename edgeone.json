@@ -1,0 +1,8 @@
+{
+  "cloudFunctions": {
+    "python": {
+      "maxDuration": 30
+    }
+  },
+  "overseasRegions": ["ap-singapore"]
+}
