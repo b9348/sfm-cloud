@@ -123,10 +123,13 @@ class handler(BaseHTTPRequestHandler):
             }).encode())
 
         except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"Error in mods/list: {error_detail}")  # 日志记录
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "success": False,
-                "message": str(e)
+                "message": f"Server error: {str(e)}"
             }).encode())
