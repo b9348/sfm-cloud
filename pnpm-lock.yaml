@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@types/jsonwebtoken':
-        specifier: ^9.0.10
-        version: 9.0.10
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
@@ -27,6 +24,9 @@ importers:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
     devDependencies:
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
         specifier: ^20
         version: 20.19.42
